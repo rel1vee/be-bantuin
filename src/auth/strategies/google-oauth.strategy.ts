@@ -3,6 +3,7 @@ import { Injectable } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
 import { Strategy, VerifyCallback } from 'passport-google-oauth20';
 import { ConfigService } from '@nestjs/config';
+import { getBatch, getNIM } from 'src/utils/getValue';
 
 @Injectable()
 export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
@@ -23,10 +24,16 @@ export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
   ): Promise<any> {
     const { id, name, emails, photos } = profile;
 
+    const nim = getNIM(emails[0].value);
+    const batch = getBatch(emails[0].value);
+
     const user = {
       googleId: id,
       email: emails[0].value,
-      fullName: name.givenName + ' ' + name.familyName,
+      fullName: name.givenName,
+      nim: nim,
+      batch: batch,
+      major: name.familyName,
       profilePicture: photos[0]?.value,
       provider: 'google',
     };

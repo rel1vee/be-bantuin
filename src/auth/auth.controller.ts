@@ -34,6 +34,9 @@ export class AuthController {
         fullName: googleUser.fullName,
         picture: googleUser.profilePicture,
         googleId: googleUser.googleId,
+        nim: googleUser.nim,
+        major: googleUser.major,
+        batch: googleUser.batch,
       });
 
       // Redirect ke frontend dengan token

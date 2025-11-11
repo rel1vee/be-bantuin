@@ -5,6 +5,9 @@ import { createZodDto } from 'nestjs-zod';
 export const GoogleUserSchema = z.object({
   email: z.string().email(),
   fullName: z.string(),
+  nim: z.string().optional(),
+  major: z.string().optional(),
+  batch: z.string().optional(),
   picture: z.string().url().optional(),
   googleId: z.string(),
 });
@@ -18,6 +21,8 @@ export const AuthResponseSchema = z.object({
     id: z.string(),
     email: z.string().email(),
     fullName: z.string(),
+    nim: z.string().nullable(),
+    major: z.string().nullable(),
     profilePicture: z.string().nullable(),
     isSeller: z.boolean(),
     isVerified: z.boolean(),

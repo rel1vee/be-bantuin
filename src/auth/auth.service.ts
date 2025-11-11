@@ -16,7 +16,8 @@ export class AuthService {
   ) {}
 
   async googleLogin(googleUser: GoogleUserDto): Promise<AuthResponseDto> {
-    const { email, fullName, picture, googleId } = googleUser;
+    const { email, fullName, nim, major, batch, picture, googleId } =
+      googleUser;
 
     // Cari atau buat user
     let user = await this.prisma.user.findUnique({
@@ -30,6 +31,9 @@ export class AuthService {
           email,
           fullName,
           googleId,
+          nim,
+          major,
+          batch,
           profilePicture: picture,
           provider: 'google',
           isVerified: true,
@@ -72,6 +76,8 @@ export class AuthService {
         profilePicture: user.profilePicture,
         isSeller: user.isSeller,
         isVerified: user.isVerified,
+        major: user.major,
+        nim: user.nim,
       },
     };
   }
