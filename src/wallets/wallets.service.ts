@@ -216,7 +216,6 @@ export class WalletsService {
     const {
       tx,
       walletId,
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       type,
       amount,
       description,
@@ -251,7 +250,6 @@ export class WalletsService {
       const transaction = await tx.walletTransaction.create({
         data: {
           walletId,
-          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
           type,
           amount,
           description,
@@ -266,12 +264,9 @@ export class WalletsService {
       return transaction;
     } catch (error) {
       console.error('Error in createTransaction:', error);
-      let errorMessage = 'Unknown error';
-      if (error instanceof Error) {
-        errorMessage = error.message;
-      }
+      const message = error instanceof Error ? error.message : 'Unknown error';
       throw new InternalServerErrorException(
-        `Gagal memproses transaksi: ${errorMessage}`,
+        `Gagal memproses transaksi: ${message}`,
       );
     }
   }
