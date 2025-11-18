@@ -7,9 +7,13 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   const configService = app.get(ConfigService);
 
-  // Enable CORS
+  // Enable CORS - hanya dari FRONTEND_URL
+  const frontendUrl = configService.get<string>('FRONTEND_URL');
+  if (!frontendUrl) {
+    throw new Error('FRONTEND_URL is not defined in environment variables');
+  }
   app.enableCors({
-    origin: configService.get<string>('FRONTEND_URL'),
+    origin: frontendUrl,
     credentials: true,
   });
 

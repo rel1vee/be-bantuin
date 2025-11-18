@@ -22,7 +22,8 @@ interface SocketWithAuth extends Socket {
 
 @WebSocketGateway({
   cors: {
-    origin: '*', // Ganti dengan FRONTEND_URL Anda di production
+    origin: process.env.FRONTEND_URL, // Hanya dari FRONTEND_URL
+    credentials: true,
   },
 })
 export class ChatsGateway implements OnGatewayConnection, OnGatewayDisconnect {
