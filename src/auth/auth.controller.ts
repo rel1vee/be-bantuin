@@ -40,12 +40,33 @@ export class AuthController {
         batch: googleUser.batch,
       });
 
-      // Redirect ke frontend dengan token
-      const frontendUrl = this.configService.get<string>('FRONTEND_URL');
-      const redirectUrl = `${frontendUrl}/auth/callback?token=${result.access_token}`;
+      // 1. Tentukan Tujuan Redirect (Frontend URL)
+      // Default ambil dari ENV
+      let frontendUrl = this.configService.get<string>('FRONTEND_URL')!;
 
+      // Cek apakah ada 'state' yang membawa returnUrl dinamis
+      if (req.query.state) {
+        try {
+          const stateJson = JSON.parse(
+            Buffer.from(req.query.state as string, 'base64').toString(),
+          );
+          if (stateJson.returnUrl) {
+            frontendUrl = stateJson.returnUrl;
+            console.log('Dynamic redirect to:', frontendUrl);
+          }
+        } catch (error) {
+          console.error('Failed to parse OAuth state:', error);
+        }
+      }
+
+      // Pastikan tidak ada trailing slash
+      frontendUrl = frontendUrl.replace(/\/$/, '');
+
+      // Redirect dengan token
+      const redirectUrl = `${frontendUrl}/auth/callback?token=${result.access_token}`;
       return res.redirect(redirectUrl);
     } catch (error) {
+      // Gunakan frontendUrl default dari env untuk error fallback
       const frontendUrl = this.configService.get<string>('FRONTEND_URL');
       const errorMessage =
         error instanceof Error ? error.message : 'Authentication failed';
