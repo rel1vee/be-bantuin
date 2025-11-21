@@ -14,7 +14,7 @@ export class AuthController {
   constructor(
     private readonly authService: AuthService,
     private readonly configService: ConfigService,
-  ) {}
+  ) { }
 
   @Public()
   @Get('google')
@@ -77,6 +77,25 @@ export class AuthController {
         totalReviews: user.totalReviews,
         totalOrdersCompleted: user.totalOrdersCompleted,
         createdAt: user.createdAt,
+      },
+    };
+  }
+
+  @Get('verify')
+  @UseGuards(JwtAuthGuard)
+  verifyToken(@GetUser() user: User) {
+    // Endpoint cepat untuk verify token dan return minimal user data
+    // Digunakan oleh frontend setelah redirect untuk update state dengan cepat
+    return {
+      statusCode: 200,
+      message: 'Token is valid',
+      data: {
+        id: user.id,
+        email: user.email,
+        fullName: user.fullName,
+        profilePicture: user.profilePicture,
+        isSeller: user.isSeller,
+        isVerified: user.isVerified,
       },
     };
   }

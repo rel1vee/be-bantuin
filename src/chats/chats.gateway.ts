@@ -20,9 +20,34 @@ interface SocketWithAuth extends Socket {
   };
 }
 
+// Helper function untuk normalize dan mendapatkan allowed origins
+function getAllowedWsOrigins(): string[] | false {
+  const normalizeUrl = (url: string | undefined): string | null => {
+    if (!url) return null;
+    return url.trim().replace(/\/+$/, ''); // Remove trailing slash(es)
+  };
+
+  const origins = [normalizeUrl(process.env.FRONTEND_URL)].filter(
+    (origin): origin is string => Boolean(origin),
+  );
+
+  if (origins.length === 0) {
+    console.warn('⚠️  WebSocket CORS: No FRONTEND_URL set');
+    return false;
+  }
+
+  console.log('✅ WebSocket CORS enabled for origins:', origins);
+  return origins;
+}
+
+const allowedWsOrigins = getAllowedWsOrigins();
+
 @WebSocketGateway({
   cors: {
-    origin: '*', // Ganti dengan FRONTEND_URL Anda di production
+    origin: allowedWsOrigins || false, // Hanya dari FRONTEND_URL (normalized)
+    credentials: true,
+    methods: ['GET', 'POST'],
+    allowedHeaders: ['Authorization', 'Content-Type'],
   },
 })
 export class ChatsGateway implements OnGatewayConnection, OnGatewayDisconnect {
@@ -34,7 +59,7 @@ export class ChatsGateway implements OnGatewayConnection, OnGatewayDisconnect {
     private chatService: ChatsService,
     private authService: AuthService,
     private notificationService: NotificationsService,
-  ) {}
+  ) { }
 
   /**
    * Handle koneksi baru
