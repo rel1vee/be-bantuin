@@ -164,11 +164,27 @@ model Order {
   buyer        User                @relation("BuyerOrders", fields: [buyerId], references: [id])
   review       Review? // One to one - satu order bisa punya satu review
   dispute      Dispute?
+  progressLogs OrderProgress[]
 
   @@index([serviceId])
   @@index([buyerId])
   @@index([status])
   @@map("orders")
+}
+
+// Model Baru: Mencatat update progress dari seller
+model OrderProgress {
+  id          String   @id @default(cuid())
+  orderId     String   @map("order_id")
+  title       String // Misal: "Sketsa Selesai", "Revisi 1", dll
+  description String?  @db.Text
+  images      String[] // Bukti progress
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
+  @@map("order_progress_logs")
 }
 
 model Review {

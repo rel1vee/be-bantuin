@@ -105,6 +105,14 @@ export const PaymentCallbackSchema = z.object({
   paidAt: z.string().optional(),
 });
 
+export const AddProgressSchema = z.object({
+  title: z.string().min(3, 'Judul progress minimal 3 karakter'),
+  description: z.string().optional(),
+  images: z.array(z.string().url()).optional().default([]),
+});
+
+export type AddProgressDto = z.infer<typeof AddProgressSchema>;
+
 export type CreateOrderDto = z.infer<typeof CreateOrderSchema>;
 export type DeliverOrderDto = z.infer<typeof DeliverOrderSchema>;
 export type RequestRevisionDto = z.infer<typeof RequestRevisionSchema>;

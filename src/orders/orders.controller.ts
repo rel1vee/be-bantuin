@@ -18,6 +18,7 @@ import type {
   OrderFilterDto,
   CancelOrderDto,
   RequestRevisionDto,
+  AddProgressDto,
 } from './dto/order.dto';
 import { Order } from '@prisma/client';
 
@@ -257,6 +258,24 @@ export class OrdersController {
     return {
       success: true,
       data: order,
+    };
+  }
+
+  @Post(':id/progress')
+  async addProgress(
+    @Param('id') orderId: string,
+    @GetUser('id') sellerId: string,
+    @Body() dto: AddProgressDto,
+  ) {
+    const progress = await this.ordersService.addProgress(
+      orderId,
+      sellerId,
+      dto,
+    );
+    return {
+      success: true,
+      message: 'Progress berhasil diupdate',
+      data: progress,
     };
   }
 }

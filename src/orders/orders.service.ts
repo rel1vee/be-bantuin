@@ -13,6 +13,7 @@ import type {
   OrderFilterDto,
   CancelOrderDto,
   RequestRevisionDto,
+  AddProgressDto,
 } from './dto/order.dto';
 import { Order, Service, Prisma } from '@prisma/client';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -501,7 +502,30 @@ export class OrdersService {
     // Build where clause
     const where: Prisma.OrderWhereInput = {};
 
-    // ... (kode filter role, status, search biarkan sama) ...
+    // Filter berdasarkan role
+    if (role === 'buyer') {
+      where.buyerId = userId;
+    } else if (role === 'worker') {
+      where.service = {
+        sellerId: userId,
+      };
+    } else {
+      // Jika tidak ada role specified, ambil semua order user tersebut
+      where.OR = [{ buyerId: userId }, { service: { sellerId: userId } }];
+    }
+
+    // Filter status
+    if (status) {
+      where.status = status;
+    }
+
+    // Search by title
+    if (search) {
+      where.title = {
+        contains: search,
+        mode: 'insensitive',
+      };
+    }
 
     // Build order by
     let orderBy: Prisma.OrderOrderByWithRelationInput = {};
@@ -598,6 +622,9 @@ export class OrdersService {
           },
         },
         review: true,
+        progressLogs: {
+          orderBy: { createdAt: 'asc' },
+        },
       },
     });
 
@@ -606,6 +633,39 @@ export class OrdersService {
     }
 
     return order;
+  }
+
+  async addProgress(orderId: string, sellerId: string, dto: AddProgressDto) {
+    const order = await this.prisma.order.findFirst({
+      where: { id: orderId, service: { sellerId } },
+    });
+
+    if (!order) throw new NotFoundException('Order tidak ditemukan');
+
+    if (order.status !== 'IN_PROGRESS' && order.status !== 'REVISION') {
+      throw new BadRequestException(
+        'Hanya bisa update progress saat pengerjaan berlangsung',
+      );
+    }
+
+    const progress = await this.prisma.orderProgress.create({
+      data: {
+        orderId,
+        title: dto.title,
+        description: dto.description,
+        images: dto.images,
+      },
+    });
+
+    // Opsional: Kirim notifikasi ke Buyer
+    await this.notificationService.create({
+      userId: order.buyerId,
+      content: `Update baru pada pesanan #${orderId.substring(0, 8)}: ${dto.title}`,
+      link: `/orders/${orderId}`,
+      type: 'ORDER',
+    });
+
+    return progress;
   }
 
   /**
