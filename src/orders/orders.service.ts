@@ -140,9 +140,11 @@ export class OrdersService {
   }> {
     const order = await this.findOneWithAccess(orderId, buyerId, 'buyer');
 
-    if (order.status !== 'DRAFT') {
+    // [FIX START] Izinkan konfirmasi jika status DRAFT atau WAITING_PAYMENT
+    const reconfirmableStatuses = ['DRAFT', 'WAITING_PAYMENT'];
+    if (!reconfirmableStatuses.includes(order.status)) {
       throw new BadRequestException(
-        'Hanya order dengan status draft yang bisa dikonfirmasi',
+        `Hanya order dengan status draft atau menunggu pembayaran yang bisa dikonfirmasi ulang. Status saat ini: ${order.status}`,
       );
     }
 

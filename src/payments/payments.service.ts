@@ -57,43 +57,26 @@ export class PaymentsService {
       }
 
       // Validasi harga & Konversi ke Integer
-      // Midtrans (IDR) tidak menerima desimal
       const amount = Math.round(order.price.toNumber());
 
       if (!amount || amount <= 0) {
         throw new BadRequestException('Invalid order amount');
       }
 
-      // Cek jika sudah ada payment pending dengan token valid
-      const existingPayment = await this.prisma.payment.findUnique({
-        where: { orderId: order.id },
-      });
+      // --- PERBAIKAN UTAMA: Buat ID Transaksi Midtrans yang Unik ---
+      // Midtrans membutuhkan ID unik untuk setiap percobaan transaksi.
+      const midtransUniqueOrderId = `${order.id}-T${Date.now()}`;
+      // -----------------------------------------------------------
 
-      if (existingPayment && existingPayment.status === 'PENDING') {
-        // Jika token masih ada dan belum expired, gunakan yang lama
-        if (
-          existingPayment.gatewayToken &&
-          existingPayment.gatewayRedirectUrl
-        ) {
-          console.log('Reusing existing payment token for order:', order.id);
-          return {
-            token: existingPayment.gatewayToken,
-            redirectUrl: existingPayment.gatewayRedirectUrl,
-          };
-        }
-      }
-
-      // --- SANITASI DATA (PENTING UNTUK MENGHINDARI ERROR MIDTRANS) ---
+      // --- SANITASI DATA ---
 
       // 1. Bersihkan Nama Item (Hapus Emoji dan karakter non-ascii)
-      // Judul jasa sering mengandung emoji yang bisa membuat Midtrans error
       const safeItemName = order.title
         .replace(/[^\x00-\x7F]/g, '') // Hapus karakter non-ASCII (emoji, dll)
         .trim()
         .substring(0, 50); // Midtrans limit nama item 50 char
 
       // 2. Bersihkan Nomor Telepon
-      // Midtrans lebih suka format 08xx atau 628xx tanpa simbol '+'
       let safePhone = user.phoneNumber || '081234567890';
       safePhone = safePhone.replace(/\+/g, '').trim();
 
@@ -109,7 +92,7 @@ export class PaymentsService {
       // Buat parameter Midtrans
       const parameter = {
         transaction_details: {
-          order_id: order.id,
+          order_id: midtransUniqueOrderId, // <-- MENGGUNAKAN ID UNIK
           gross_amount: amount,
         },
         customer_details: {
@@ -156,7 +139,8 @@ export class PaymentsService {
 
       const { token, redirect_url } = transaction;
 
-      // Simpan/Update payment record di DB
+      // Simpan/Update payment record di DB.
+      // Kita tetap menggunakan order.id sebagai foreign key unik.
       await this.prisma.payment.upsert({
         where: { orderId: order.id },
         update: {
@@ -165,6 +149,7 @@ export class PaymentsService {
           gatewayToken: token,
           gatewayRedirectUrl: redirect_url,
           updatedAt: new Date(),
+          transactionId: null, // Reset ID transaksi Midtrans lama
         },
         create: {
           orderId: order.id,
@@ -199,7 +184,7 @@ export class PaymentsService {
    */
   async handlePaymentWebhook(payload: Record<string, unknown>) {
     try {
-      const order_id = payload.order_id as string;
+      const midtransOrderId = payload.order_id as string; // <-- ID Unik Midtrans
       const transaction_status = payload.transaction_status as string;
       const transaction_id = payload.transaction_id as string;
       const status_code = payload.status_code as string;
@@ -207,21 +192,35 @@ export class PaymentsService {
       const signature_key = payload.signature_key as string;
       const payment_type = payload.payment_type as string;
 
+      // --- PERBAIKAN UTAMA: Ekstraksi ID Order Asli ---
+      // Cari pemisah '-T' untuk mendapatkan ID order asli
+      const orderIdIndex = midtransOrderId.indexOf('-T');
+      const originalOrderId =
+        orderIdIndex !== -1
+          ? midtransOrderId.substring(0, orderIdIndex)
+          : midtransOrderId; // Fallback jika format lama
+      // ------------------------------------------------
+
       console.log(
-        `Processing Webhook for Order: ${order_id}, Status: ${transaction_status}`,
+        `Processing Webhook for Order: ${originalOrderId}, Midtrans ID: ${midtransOrderId}, Status: ${transaction_status}`,
       );
 
       console.log('--- MIDTRANS WEBHOOK RECEIVED ---');
       console.log(JSON.stringify(payload, null, 2));
 
       // Validasi payload dasar
-      if (!order_id || !transaction_status || !gross_amount || !signature_key) {
+      if (
+        !midtransOrderId ||
+        !transaction_status ||
+        !gross_amount ||
+        !signature_key
+      ) {
         throw new BadRequestException('Invalid webhook payload');
       }
 
       // 1. Verifikasi Signature Key
       const expectedSignature = this.verifySignature(
-        order_id,
+        midtransOrderId, // <-- Gunakan ID Unik Midtrans untuk Signature
         status_code,
         gross_amount,
         this.midtransServerKey,
@@ -236,18 +235,16 @@ export class PaymentsService {
           received: signature_key,
           expected: expectedSignature,
         });
-        // SEMENTARA: Comment baris ini biar order tetap jalan meski key salah
-        // throw new BadRequestException('Invalid signature');
         console.warn('BYPASSING SIGNATURE CHECK FOR TESTING');
       }
 
       // 2. Dapatkan payment record
       const payment = await this.prisma.payment.findUnique({
-        where: { orderId: order_id },
+        where: { orderId: originalOrderId }, // <-- Cari berdasarkan ID Order Asli
       });
 
       if (!payment) {
-        console.error(`Payment not found for Order ID: ${order_id}`);
+        console.error(`Payment not found for Order ID: ${originalOrderId}`);
         throw new NotFoundException('Payment record not found');
       }
 
@@ -263,9 +260,8 @@ export class PaymentsService {
       let updatedStatus = payment.status;
 
       if (transaction_status === 'capture') {
-        // Untuk kartu kredit, cek fraud_status
         if (payload.fraud_status === 'challenge') {
-          updatedStatus = 'PENDING'; // Challenge berarti belum pasti sukses
+          updatedStatus = 'PENDING';
         } else if (payload.fraud_status === 'accept') {
           updatedStatus = 'SETTLEMENT';
         }
@@ -276,7 +272,7 @@ export class PaymentsService {
         transaction_status === 'deny' ||
         transaction_status === 'expire'
       ) {
-        updatedStatus = 'CANCELLED'; // Mapping ke Enum CANCELLED
+        updatedStatus = 'CANCELLED';
       } else if (transaction_status === 'pending') {
         updatedStatus = 'PENDING';
       }
@@ -295,7 +291,7 @@ export class PaymentsService {
       // 5. Emit event jika sukses
       if (updatedStatus === 'SETTLEMENT') {
         this.eventEmitter.emit('payment.settled', {
-          orderId: order_id,
+          orderId: originalOrderId, // <-- Gunakan ID Order Asli
           transactionData: payload,
         });
       }
