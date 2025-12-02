@@ -47,6 +47,7 @@ model User {
   wallet                                  Wallet?
   reports                                 Report[]
   reports                                 Report[]
+  reports                                 Report[]
 
   @@map("users")
 }
@@ -440,8 +441,10 @@ model Report {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  reporter     User @relation("ReportsCreated", fields: [reporterId], references: [id])
-  reportedUser User @relation("ReportsReceived", fields: [reportedUserId], references: [id])
+  reporter     User    @relation("ReportsCreated", fields: [reporterId], references: [id])
+  reportedUser User    @relation("ReportsReceived", fields: [reportedUserId], references: [id])
+  user         User?   @relation(fields: [userId], references: [id])
+  userId       String?
 
   @@index([reporterId])
   @@index([reportedUserId])
