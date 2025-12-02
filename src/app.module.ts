@@ -19,6 +19,7 @@ import { ChatsModule } from './chats/chats.module';
 import { TasksModule } from './tasks/tasks.module';
 import { ScheduleModule } from '@nestjs/schedule';
 import { ReportsModule } from './reports/reports.module';
+import { StorageModule } from './storage/storage.module';
 
 @Module({
   imports: [
@@ -41,6 +42,7 @@ import { ReportsModule } from './reports/reports.module';
     ChatsModule,
     TasksModule,
     ReportsModule,
+    StorageModule,
   ],
   controllers: [AppController],
   providers: [AppService, PrismaService],
