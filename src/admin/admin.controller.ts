@@ -128,6 +128,9 @@ export class AdminController {
     return {
       success: true,
       data: history,
+    };
+  }
+
   @Get('users')
   async getAllUsers(
     @Query('page') page?: number,
