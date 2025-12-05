@@ -220,4 +220,27 @@ export class UsersService {
       services,
     };
   }
+
+  async getTopSellers() {
+    return this.prisma.user.findMany({
+      where: {
+        isSeller: true,
+        status: 'active',
+        totalOrdersCompleted: { gt: 0 }, // Minimal pernah menyelesaikan 1 order
+      },
+      orderBy: {
+        totalOrdersCompleted: 'desc',
+      },
+      take: 4,
+      select: {
+        id: true,
+        fullName: true,
+        profilePicture: true,
+        major: true,
+        bio: true,
+        avgRating: true,
+        totalOrdersCompleted: true,
+      },
+    });
+  }
 }

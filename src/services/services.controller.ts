@@ -66,6 +66,16 @@ export class ServicesController {
     };
   }
 
+  @Public()
+  @Get('featured')
+  async getFeatured() {
+    const services = await this.servicesService.getFeatured();
+    return {
+      success: true,
+      data: services,
+    };
+  }
+
   /**
    * Get a single service by ID
    * GET /api/services/:id

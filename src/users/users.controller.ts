@@ -11,6 +11,7 @@ import { UsersService } from './users.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { GetUser } from '../auth/decorators/get-user.decorator';
 import type { ActivateSellerDto } from './dto/activate-seller.dto';
+import { Public } from 'src/auth/decorators/public.decorator';
 
 @Controller('users')
 @UseGuards(JwtAuthGuard)
@@ -50,6 +51,16 @@ export class UsersController {
     return {
       success: true,
       data: stats,
+    };
+  }
+
+  @Public() // <--- Tambahkan ini agar bisa diakses di Landing Page
+  @Get('top-sellers')
+  async getTopSellers() {
+    const sellers = await this.usersService.getTopSellers();
+    return {
+      success: true,
+      data: sellers,
     };
   }
 }

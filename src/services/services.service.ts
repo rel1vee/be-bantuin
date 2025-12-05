@@ -384,4 +384,33 @@ export class ServicesService {
 
     return services;
   }
+
+  async getFeatured() {
+    return this.prisma.service.findMany({
+      where: {
+        status: 'ACTIVE',
+        isActive: true,
+        avgRating: { gte: 4.0 }, // Minimal rating 4.0
+      },
+      orderBy: [
+        { avgRating: 'desc' }, // Rating tertinggi dulu
+        { totalOrders: 'desc' }, // Lalu jumlah order terbanyak
+      ],
+      take: 4, // Ambil 4 teratas
+      include: {
+        seller: {
+          select: {
+            id: true,
+            fullName: true,
+            profilePicture: true,
+            major: true,
+            batch: true,
+            avgRating: true,
+            totalReviews: true,
+            totalOrdersCompleted: true,
+          },
+        },
+      },
+    });
+  }
 }
