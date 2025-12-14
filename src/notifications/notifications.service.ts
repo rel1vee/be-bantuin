@@ -1,7 +1,8 @@
 import { Injectable, OnModuleInit } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { ConfigService } from '@nestjs/config'; 
-import * as nodemailer from 'nodemailer'; 
+import { ConfigService } from '@nestjs/config';
+import * as nodemailer from 'nodemailer';
+import * as webPush from 'web-push';
 import type { PrismaClient, User } from '@prisma/client';
 
 type NotificationData = {
@@ -9,7 +10,7 @@ type NotificationData = {
   content: string;
   link?: string;
   type?: string;
-  emailSubject?: string; 
+  emailSubject?: string;
 };
 
 type Tx = Omit<
@@ -21,16 +22,18 @@ type Tx = Omit<
 export class NotificationsService implements OnModuleInit {
   private transporter: nodemailer.Transporter;
   private frontendUrl: string;
+  // Fallback in-memory storage
+  private tempSubscriptions: Map<string, any[]> = new Map();
 
   constructor(
     private prisma: PrismaService,
-    private configService: ConfigService, 
-  ) {}
+    private configService: ConfigService,
+  ) { }
 
   async onModuleInit() {
     // Baca konfigurasi dari ENV
     this.frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3000';
-    
+
     // Konfigurasi NodeMailer Transporter
     this.transporter = nodemailer.createTransport({
       host: this.configService.get<string>('SMTP_HOST'),
@@ -47,6 +50,126 @@ export class NotificationsService implements OnModuleInit {
       console.log('✅ SMTP Server Ready: Email notifications are enabled.');
     } catch (error) {
       console.error('❌ SMTP Connection Error: Email notifications are disabled.', error);
+    }
+
+    // Web Push Init
+    const vapidPublicKey = this.configService.get<string>('VAPID_PUBLIC_KEY');
+    const vapidPrivateKey = this.configService.get<string>('VAPID_PRIVATE_KEY');
+    const vapidSubject = this.configService.get<string>('VAPID_SUBJECT') || 'mailto:admin@bantuin.com';
+
+    if (vapidPublicKey && vapidPrivateKey) {
+      webPush.setVapidDetails(vapidSubject, vapidPublicKey, vapidPrivateKey);
+      console.log('✅ Web Push initialized');
+    }
+  }
+
+  async subscribe(userId: string, subscription: any) {
+    // In-memory Save
+    const userSubs = this.tempSubscriptions.get(userId) || [];
+    const existsInMemory = userSubs.some(s => s.endpoint === subscription.endpoint);
+    if (!existsInMemory) {
+      userSubs.push(subscription);
+      this.tempSubscriptions.set(userId, userSubs);
+      console.log(`[Push] Subscribed user ${userId} (In-Memory). Total: ${userSubs.length}`);
+    }
+
+    try {
+      // Use any cast because PrismaClient might not be regenerated yet
+      const pushSub = (this.prisma as any).pushSubscription;
+      if (!pushSub) return;
+
+      const existing = await pushSub.findFirst({
+        where: { endpoint: subscription.endpoint, userId }
+      });
+
+      if (!existing) {
+        await pushSub.create({
+          data: {
+            userId,
+            endpoint: subscription.endpoint,
+            keys: subscription.keys
+          }
+        });
+      }
+    } catch (e) {
+      console.error('Push subscription failed (DB):', e.message);
+    }
+  }
+
+  async unsubscribe(userId: string, endpoint: string) {
+    // In-memory Remove
+    const userSubs = this.tempSubscriptions.get(userId) || [];
+    const filteredCtx = userSubs.filter(s => s.endpoint !== endpoint);
+    this.tempSubscriptions.set(userId, filteredCtx);
+
+    try {
+      const pushSub = (this.prisma as any).pushSubscription;
+      if (!pushSub) return;
+
+      await pushSub.deleteMany({
+        where: {
+          userId,
+          endpoint
+        }
+      });
+    } catch (e) {
+      console.error('Push unsubscribe failed (DB):', e.message);
+    }
+  }
+
+  private async sendPushNotification(user: User, data: NotificationData) {
+    try {
+      let subscriptions: any[] = [];
+      const pushSub = (this.prisma as any).pushSubscription;
+
+      // 1. Try DB
+      if (pushSub) {
+        try {
+          subscriptions = await pushSub.findMany({ where: { userId: user.id } });
+        } catch (e) {
+          console.warn('Failed to fetch subs from DB, using memory only');
+        }
+      }
+
+      // 2. Fetch In-Memory (Merge)
+      const memSubs = this.tempSubscriptions.get(user.id) || [];
+
+      // Merge: create map by endpoint
+      const allSubsMap = new Map();
+      subscriptions.forEach(s => allSubsMap.set(s.endpoint, s));
+      memSubs.forEach(s => allSubsMap.set(s.endpoint, s));
+
+      const finalSubs = Array.from(allSubsMap.values());
+      console.log(`[Push-Debug] User ${user.id} has ${finalSubs.length} subs (DB: ${subscriptions.length}, Mem: ${memSubs.length})`);
+
+      if (finalSubs.length === 0) return;
+
+      const payload = JSON.stringify({
+        title: 'Bantuin',
+        body: data.content,
+        url: `${this.frontendUrl}${data.link || '/notifications'}`,
+        icon: '/logo.svg' // Corrected icon path
+      });
+
+      for (const sub of finalSubs) {
+        try {
+          await webPush.sendNotification({
+            endpoint: sub.endpoint,
+            keys: sub.keys as any
+          }, payload);
+          console.log('[Push] Notification sent to endpoint.');
+        } catch (e: any) {
+          console.error('[Push] Send Error:', e.statusCode, e.body);
+          if (e.statusCode === 410 || e.statusCode === 404) {
+            // Remove from DB if exists
+            if (pushSub) await pushSub.delete({ where: { id: sub.id } }).catch(() => { });
+            // Remove from memory
+            this.unsubscribe(user.id, sub.endpoint);
+          }
+        }
+      }
+    } catch (e) {
+      console.error('Error sending push notification:', e);
     }
   }
 
@@ -89,12 +212,12 @@ export class NotificationsService implements OnModuleInit {
       const user = await this.prisma.user.findUnique({
         where: { id: data.userId },
       });
-      
+
       if (!user) {
-         console.warn(`User ${data.userId} not found for notification.`);
-         return;
+        console.warn(`User ${data.userId} not found for notification.`);
+        return;
       }
-      
+
       await this.prisma.notification.create({
         data: {
           userId: data.userId,
@@ -105,6 +228,7 @@ export class NotificationsService implements OnModuleInit {
       });
 
       void this.sendEmailNotification(user, data);
+      void this.sendPushNotification(user, data);
 
     } catch (error) {
       console.error('Failed to create notification to DB:', error);
@@ -125,6 +249,7 @@ export class NotificationsService implements OnModuleInit {
       const user = await this.prisma.user.findUnique({ where: { id: data.userId } });
       if (user) {
         void this.sendEmailNotification(user, data);
+        void this.sendPushNotification(user, data);
       } else {
         console.warn(`User ${data.userId} not found for inTx email.`);
       }

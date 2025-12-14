@@ -6,18 +6,20 @@ import {
   UseGuards,
   HttpCode,
   HttpStatus,
+  Body,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { GetUser } from '../auth/decorators/get-user.decorator';
 import { PrismaService } from '../prisma/prisma.service';
+import { NotificationsService } from './notifications.service';
 
 @Controller('notifications')
 @UseGuards(JwtAuthGuard) // Amankan semua endpoint
 export class NotificationsController {
   constructor(
-    // Kita inject PrismaService di sini untuk operasi 'baca'
     private prisma: PrismaService,
-  ) {}
+    private notificationsService: NotificationsService,
+  ) { }
 
   /**
    * [User] Mendapatkan semua notifikasi (terbaru dulu)
@@ -89,5 +91,37 @@ export class NotificationsController {
       success: true,
       message: 'Semua notifikasi ditandai telah dibaca',
     };
+  }
+
+  @Post('subscribe')
+  @HttpCode(HttpStatus.CREATED)
+  async subscribe(
+    @GetUser('id') userId: string,
+    @Body() subscription: any,
+  ) {
+    await this.notificationsService.subscribe(userId, subscription);
+    return { success: true };
+  }
+
+  @Post('unsubscribe')
+  @HttpCode(HttpStatus.OK)
+  async unsubscribe(
+    @GetUser('id') userId: string,
+    @Body() body: { endpoint: string },
+  ) {
+    await this.notificationsService.unsubscribe(userId, body.endpoint);
+    return { success: true };
+  }
+
+  @Post('test-push')
+  @HttpCode(HttpStatus.OK)
+  async testPush(@GetUser('id') userId: string) {
+    await this.notificationsService.create({
+      userId,
+      content: 'Halo! Ini adalah tes notifikasi dari sistem Bantuin.',
+      type: 'SYSTEM',
+      link: '/notifications'
+    });
+    return { success: true, message: 'Notifikasi tes dikirim' };
   }
 }

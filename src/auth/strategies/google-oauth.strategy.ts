@@ -42,7 +42,7 @@ export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
       nim: nim,
       batch: batch,
       major: familyName || null, // Sesuai skema, `major` bisa null
-      profilePicture: picture,
+      picture: picture, // Changed from profilePicture to match DTO
       provider: 'google',
     };
 
