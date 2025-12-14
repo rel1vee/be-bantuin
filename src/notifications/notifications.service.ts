@@ -208,13 +208,14 @@ export class NotificationsService implements OnModuleInit {
   }
 
   async create(data: NotificationData) {
+    console.log(`[Notification] create() called for User ${data.userId} (Type: ${data.type})`);
     try {
       const user = await this.prisma.user.findUnique({
         where: { id: data.userId },
       });
 
       if (!user) {
-        console.warn(`User ${data.userId} not found for notification.`);
+        console.warn(`[Notification] User ${data.userId} not found for notification.`);
         return;
       }
 
@@ -236,6 +237,7 @@ export class NotificationsService implements OnModuleInit {
   }
 
   async createInTx(tx: Tx, data: NotificationData) {
+    console.log(`[Notification] createInTx() called for User ${data.userId} (Type: ${data.type})`);
     try {
       await tx.notification.create({
         data: {
@@ -246,10 +248,10 @@ export class NotificationsService implements OnModuleInit {
         },
       });
 
-      const user = await this.prisma.user.findUnique({ where: { id: data.userId } });
+      const user = await tx.user.findUnique({ where: { id: data.userId } });
       if (user) {
-        void this.sendEmailNotification(user, data);
-        void this.sendPushNotification(user, data);
+        this.sendEmailNotification(user, data).catch(err => console.error('[Async Email Error]', err));
+        this.sendPushNotification(user, data).catch(err => console.error('[Async Push Error]', err));
       } else {
         console.warn(`User ${data.userId} not found for inTx email.`);
       }
@@ -257,5 +259,15 @@ export class NotificationsService implements OnModuleInit {
     } catch (error) {
       console.error('Error creating notification in TX:', error);
     }
+  }
+
+  /**
+   * Mengirim notifikasi eksternal (Push & Email) TANPA menyimpan ke database Notification (Lonceng).
+   * Digunakan untuk Chat agar tidak spam di list notifikasi aplikasi.
+   */
+  async sendExternalNotification(user: User, data: NotificationData) {
+    console.log(`[Notification] sendExternalNotification() called for User ${user.id} (Type: ${data.type})`);
+    this.sendEmailNotification(user, data).catch(err => console.error('[Async Email Error]', err));
+    this.sendPushNotification(user, data).catch(err => console.error('[Async Push Error]', err));
   }
 }

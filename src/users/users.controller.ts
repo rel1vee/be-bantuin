@@ -7,6 +7,7 @@ import {
   HttpCode,
   HttpStatus,
   Patch,
+  Param,
 } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -97,6 +98,16 @@ export class UsersController {
     return {
       success: true,
       message: 'Nomor telepon berhasil diverifikasi',
+      data: user,
+    };
+  }
+
+  @Public()
+  @Get('public/:id')
+  async getPublicProfile(@Param('id') id: string) {
+    const user = await this.usersService.findPublicProfile(id);
+    return {
+      success: true,
       data: user,
     };
   }

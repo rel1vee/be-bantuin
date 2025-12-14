@@ -7,6 +7,7 @@ import {
   OnGatewayDisconnect,
   WebSocketServer,
 } from '@nestjs/websockets';
+import { Inject, forwardRef } from '@nestjs/common';
 import { Server, Socket } from 'socket.io';
 import { ChatsService } from './chats.service';
 import { AuthService } from '../auth/auth.service'; // Untuk validasi token
@@ -31,10 +32,11 @@ export class ChatsGateway implements OnGatewayConnection, OnGatewayDisconnect {
   private connectedUsers: Map<string, Socket> = new Map();
 
   constructor(
+    @Inject(forwardRef(() => ChatsService))
     private chatService: ChatsService,
     private authService: AuthService,
     private notificationService: NotificationsService,
-  ) {}
+  ) { }
 
   /**
    * Handle koneksi baru
@@ -145,6 +147,18 @@ export class ChatsGateway implements OnGatewayConnection, OnGatewayDisconnect {
   /**
    * [Event] User mengirim pesan
    */
+
+  /**
+   * [PUBLIC] Broadcast pesan ke user tertentu (Dipanggil oleh Service/Controller)
+   */
+  broadcastMessage(userId: string, message: any) {
+    const socket = this.connectedUsers.get(userId);
+    if (socket) {
+      socket.emit('newMessage', message);
+      return true; // Online
+    }
+    return false; // Offline
+  }
 
   @SubscribeMessage('sendMessage')
   async handleSendMessage(

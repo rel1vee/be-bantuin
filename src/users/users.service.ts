@@ -29,6 +29,8 @@ export class UsersService {
         batch: true,
         phoneNumber: true,
         profilePicture: true,
+        coverPicture: true,
+        socialMedia: true,
         bio: true,
         isVerified: true,
         isSeller: true,
@@ -54,6 +56,35 @@ export class UsersService {
       where: { email },
     });
   }
+
+  async findPublicProfile(id: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        fullName: true,
+        profilePicture: true,
+        coverPicture: true,
+        socialMedia: true,
+        bio: true,
+        major: true,
+        batch: true,
+        isSeller: true,
+        isVerified: true,
+        avgRating: true,
+        totalReviews: true,
+        totalOrdersCompleted: true,
+        createdAt: true,
+      },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User tidak ditemukan');
+    }
+
+    return user;
+  }
+
 
   async activateSeller(userId: string, phoneNumber: string, bio: string) {
     // Check if user exists
@@ -108,6 +139,8 @@ export class UsersService {
         batch: true,
         phoneNumber: true,
         profilePicture: true,
+        coverPicture: true,
+        socialMedia: true,
         bio: true,
         isVerified: true,
         isSeller: true,
@@ -140,6 +173,8 @@ export class UsersService {
         batch: true,
         phoneNumber: true,
         profilePicture: true,
+        coverPicture: true,
+        socialMedia: true,
         bio: true,
         isVerified: true,
         isSeller: true,
@@ -351,6 +386,8 @@ export class UsersService {
         batch: true,
         phoneNumber: true,
         profilePicture: true,
+        coverPicture: true,
+        socialMedia: true,
         bio: true,
         isVerified: true,
         isSeller: true,

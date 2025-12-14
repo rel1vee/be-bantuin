@@ -25,7 +25,7 @@ export class OrdersService {
     private paymentsService: PaymentsService,
     private walletService: WalletsService,
     private notificationService: NotificationsService,
-  ) {}
+  ) { }
 
   /**
    * Membuat order baru
@@ -117,6 +117,14 @@ export class OrdersService {
           },
         },
       },
+    });
+
+    // Notifikasi ke Seller bahwa ada pesanan baru
+    await this.notificationService.create({
+      userId: service.sellerId,
+      content: `Pesanan baru #${order.id.substring(0, 8)} menunggu pembayaran.`,
+      link: `/seller/orders/${order.id}`,
+      type: 'ORDER',
     });
 
     return order;

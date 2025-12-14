@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Body, UseGuards, Param } from '@nestjs/common';
 import { ChatsService } from './chats.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { GetUser } from '../auth/decorators/get-user.decorator';
@@ -7,7 +7,7 @@ import type { CreateConversationDto } from './dto/chat.dto';
 @Controller('chat')
 @UseGuards(JwtAuthGuard)
 export class ChatsController {
-  constructor(private readonly chatService: ChatsService) {}
+  constructor(private readonly chatService: ChatsService) { }
 
   /**
    * [REST] Memulai obrolan baru (atau mengirim pesan ke yang sudah ada)
@@ -42,5 +42,18 @@ export class ChatsController {
       success: true,
       data: conversations,
     };
+  }
+
+  /**
+   * [REST] Tandai obrolan sebagai sudah dibaca
+   * POST /api/chat/:id/read
+   */
+  @Post(':id/read')
+  async markAsRead(
+    @GetUser('id') userId: string,
+    @Param('id') conversationId: string,
+  ) {
+    await this.chatService.markConversationAsRead(userId, conversationId);
+    return { success: true };
   }
 }

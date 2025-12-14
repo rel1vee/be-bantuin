@@ -14,7 +14,7 @@ import { Prisma } from '@prisma/client';
 
 @Injectable()
 export class ServicesService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private prisma: PrismaService) { }
 
   /**
    * Create a new service listing

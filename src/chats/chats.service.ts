@@ -2,8 +2,12 @@ import {
   Injectable,
   ForbiddenException,
   BadRequestException,
+  Inject,
+  forwardRef,
 } from '@nestjs/common';
+import { ChatsGateway } from './chats.gateway';
 import { PrismaService } from '../prisma/prisma.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import type { CreateConversationDto } from './dto/chat.dto';
 import type { SendMessageDto } from './dto/chat.dto';
 import type { PrismaClient } from '@prisma/client';
@@ -15,7 +19,12 @@ type PrismaTx = Omit<
 
 @Injectable()
 export class ChatsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private notificationsService: NotificationsService,
+    @Inject(forwardRef(() => ChatsGateway))
+    private chatsGateway: ChatsGateway, // Inject Gateway
+  ) { }
 
   /**
    * [REST] Mendapatkan atau Membuat Obrolan Baru
@@ -118,25 +127,56 @@ export class ChatsService {
       },
     });
 
+    // 3. Kirim Notifikasi Eksternal (Push & Email) SAJA
+    // Kita TIDAK membuat record di tabel `Notification` agar tidak muncul di lonceng (Bell).
+    const participants = await tx.conversationParticipant.findMany({
+      where: {
+        conversationId,
+        NOT: { userId: senderId },
+      },
+      include: { user: true },
+    });
+
+    for (const p of participants) {
+      // Panggil method baru di NotificationsService untuk push/email tanpa simpan DB
+      this.notificationsService.sendExternalNotification(p.user, {
+        userId: p.userId,
+        content: `Pesan baru dari ${message.sender.fullName}: ${content.substring(0, 50)}${content.length > 50 ? '...' : ''
+          }`,
+        type: 'CHAT',
+        link: `/chat?id=${conversationId}`,
+      });
+    }
+
+    // 4. [FIX] Broadcast Real-Time via Socket
+    const recipientIds = await this.getRecipientIds(conversationId, senderId);
+    // Broadcast ke lawan bicara
+    for (const id of recipientIds) {
+      this.chatsGateway.broadcastMessage(id, message);
+    }
+    // Broadcast ke diri sendiri (untuk konfirmasi/update UI)
+    this.chatsGateway.broadcastMessage(senderId, message);
+
     return message;
   }
 
   /**
    * [REST] Mendapatkan semua obrolan (Inbox)
    */
+  /**
+   * [REST] Mendapatkan semua obrolan (Inbox) dengan hitungan pesan belum dibaca
+   */
   async getMyConversations(userId: string) {
-    return this.prisma.conversation.findMany({
+    const conversations = await this.prisma.conversation.findMany({
       where: { participants: { some: { userId } } },
-      orderBy: { updatedAt: 'desc' }, // Terbaru dulu
+      orderBy: { updatedAt: 'desc' },
       include: {
         lastMessage: {
-          // Ambil pesan terakhir
           include: {
             sender: { select: { fullName: true } },
           },
         },
         participants: {
-          // Ambil info peserta lain
           where: { NOT: { userId } },
           include: {
             user: {
@@ -144,8 +184,39 @@ export class ChatsService {
             },
           },
         },
+        messages: {
+          where: {
+            isRead: false,
+            senderId: { not: userId },
+          },
+          select: { id: true },
+        },
       },
     });
+
+    return conversations.map((c) => ({
+      ...c,
+      unreadCount: c.messages.length,
+      messages: undefined, // remove raw array
+    }));
+  }
+
+  /**
+   * [REST/Socket] Tandai semua pesan di obrolan sebagai sudah dibaca
+   */
+  async markConversationAsRead(userId: string, conversationId: string) {
+    await this.prisma.message.updateMany({
+      where: {
+        conversationId,
+        senderId: { not: userId }, // Hanya pesan dari orang lain
+        isRead: false,
+      },
+      data: {
+        isRead: true,
+        readAt: new Date(),
+      },
+    });
+    return { success: true };
   }
 
   /**

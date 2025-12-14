@@ -50,6 +50,67 @@ export const CreateServiceSchema = z.object({
     .max(5, { message: 'Maksimal 5 gambar' })
     .optional()
     .default([]),
+
+  // Pricing Details
+  pricingType: z
+    .enum([
+      'FIXED',        // Harga tetap (desain logo, jasa event, dll)
+      'PER_PAGE',     // Per halaman (ketik, translate dokumen)
+      'PER_WORD',     // Per kata (proofreading, translate)
+      'PER_HOUR',     // Per jam (tutor, konsultasi)
+      'PER_ITEM',     // Per item (edit foto, desain banner)
+      'PER_MINUTE',   // Per menit (edit video, voice over)
+      'PER_QUESTION', // Per soal (jasa jawab soal, kerjakan tugas)
+      'PER_SLIDE',    // Per slide (PPT design)
+      'CUSTOM',       // Custom pricing (dijelaskan di description)
+    ])
+    .optional()
+    .describe('Tipe pricing sesuai jenis jasa'),
+
+  pricePerUnit: z
+    .number()
+    .positive({ message: 'Harga per unit harus lebih dari 0' })
+    .optional()
+    .describe('Harga per unit sesuai tipe pricing'),
+
+  minimumOrder: z
+    .number()
+    .int()
+    .positive({ message: 'Minimal order harus lebih dari 0' })
+    .optional()
+    .describe('Minimal order (misal: minimal 5 halaman, 10 soal, dll)'),
+
+  // Service Details
+  requirements: z
+    .string()
+    .max(1000, { message: 'Requirements maksimal 1000 karakter' })
+    .optional()
+    .describe('Apa yang perlu disiapkan customer'),
+
+  whatsIncluded: z
+    .string()
+    .max(1000, { message: 'What\'s included maksimal 1000 karakter' })
+    .optional()
+    .describe('Apa yang didapat customer'),
+
+  additionalInfo: z
+    .string()
+    .max(500, { message: 'Additional info maksimal 500 karakter' })
+    .optional()
+    .describe('Catatan tambahan'),
+
+  // FAQ
+  faq: z
+    .array(
+      z.object({
+        question: z.string().min(5).max(200),
+        answer: z.string().min(5).max(500),
+      }),
+    )
+    .max(5, { message: 'Maksimal 5 FAQ' })
+    .optional()
+    .default([])
+    .describe('Frequently Asked Questions'),
 });
 
 // Schema for updating service
@@ -81,9 +142,9 @@ export const ServiceFilterSchema = z.object({
     .default('newest'),
 });
 
-export class CreateServiceDto extends createZodDto(CreateServiceSchema) {}
-export class UpdateServiceDto extends createZodDto(UpdateServiceSchema) {}
-export class ServiceFilterDto extends createZodDto(ServiceFilterSchema) {}
+export class CreateServiceDto extends createZodDto(CreateServiceSchema) { }
+export class UpdateServiceDto extends createZodDto(UpdateServiceSchema) { }
+export class ServiceFilterDto extends createZodDto(ServiceFilterSchema) { }
 
 // Ekspor sebagai Tipe (untuk type-hinting di Service)
 export type ServiceFilterType = z.infer<typeof ServiceFilterSchema>;
