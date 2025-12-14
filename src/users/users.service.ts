@@ -6,10 +6,16 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import type { Prisma } from '@prisma/client';
+import { randomInt } from 'crypto';
+
+import { ConfigService } from '@nestjs/config';
 
 @Injectable()
 export class UsersService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private configService: ConfigService,
+  ) { }
 
   async findById(id: string) {
     const user = await this.prisma.user.findUnique({
@@ -242,5 +248,125 @@ export class UsersService {
         totalOrdersCompleted: true,
       },
     });
+  }
+
+  // --- Phone Verification Logic ---
+
+  // In-memory store for OTP (userId -> { otp: string, phoneNumber: string, expiresAt: number })
+  // Note: In production, use Redis.
+  private otpStore = new Map<
+    string,
+    { otp: string; phoneNumber: string; expiresAt: number }
+  >();
+
+  async requestPhoneVerification(userId: string, phoneNumber: string) {
+    // 1. Normalize phone number
+    let normalizedPhone = phoneNumber;
+    if (normalizedPhone.startsWith('0')) {
+      normalizedPhone = '+62' + normalizedPhone.substring(1);
+    } else if (normalizedPhone.startsWith('62')) {
+      normalizedPhone = '+' + normalizedPhone;
+    } else if (!normalizedPhone.startsWith('+62')) {
+      normalizedPhone = '+62' + normalizedPhone;
+    }
+
+    // 2. Generate OTP
+    const otp = randomInt(100000, 999999).toString();
+
+    // 3. Store OTP (expires in 5 minutes)
+    this.otpStore.set(userId, {
+      otp,
+      phoneNumber: normalizedPhone,
+      expiresAt: Date.now() + 5 * 60 * 1000,
+    });
+
+    // 4. Send OTP via Fonnte API
+    const fonnteToken = this.configService.get<string>('FONNTE_TOKEN');
+    if (fonnteToken) {
+      try {
+        const formData = new FormData();
+        formData.append('target', normalizedPhone);
+        formData.append(
+          'message',
+          `*Bantuin App*\n\nKode Verifikasi Anda: *${otp}*\n\nJangan berikan kode ini kepada siapapun. Kode berlaku selama 5 menit.`,
+        );
+
+        const response = await fetch('https://api.fonnte.com/send', {
+          method: 'POST',
+          headers: {
+            Authorization: fonnteToken,
+          },
+          body: formData,
+        });
+
+        const result = await response.json();
+        console.log('[FONNTE] Response:', result);
+      } catch (error) {
+        console.error('[FONNTE] Error sending OTP:', error);
+        // Fallback to console log if API fails
+        console.log(`[WHATSAPP MOCK BACKUP] OTP: ${otp}`);
+      }
+    } else {
+      console.warn('[FONNTE] Token not found in env, using mock logger');
+      console.log('================================================');
+      console.log(`[WHATSAPP MOCK] Sending OTP to ${normalizedPhone}`);
+      console.log(`OTP CODE: ${otp}`);
+      console.log('================================================');
+    }
+
+    return {
+      message: 'Kode verifikasi telah dikirim ke WhatsApp Anda',
+      // developer_note removed for production-like feel, or keep if debugging
+    };
+  }
+
+  async verifyPhone(userId: string, otp: string) {
+    const stored = this.otpStore.get(userId);
+
+    if (!stored) {
+      throw new BadRequestException('Tidak ada permintaan verifikasi yang aktif');
+    }
+
+    if (Date.now() > stored.expiresAt) {
+      this.otpStore.delete(userId);
+      throw new BadRequestException('Kode verifikasi telah kadaluarsa');
+    }
+
+    if (stored.otp !== otp) {
+      throw new BadRequestException('Kode verifikasi salah');
+    }
+
+    // Update User Phone Number
+    const updatedUser = await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        phoneNumber: stored.phoneNumber,
+      },
+      select: {
+        id: true,
+        email: true,
+        fullName: true,
+        nim: true,
+        major: true,
+        batch: true,
+        phoneNumber: true,
+        profilePicture: true,
+        bio: true,
+        isVerified: true,
+        isSeller: true,
+        avgRating: true,
+        totalReviews: true,
+        totalOrdersCompleted: true,
+        status: true,
+        role: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+
+    // Clear OTP
+    this.otpStore.delete(userId);
+
+    return updatedUser;
   }
 }
