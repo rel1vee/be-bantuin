@@ -44,7 +44,7 @@ export class ServicesController {
 
     return {
       success: true,
-      message: 'Jasa berhasil dibuat',
+      message: 'Jasa berhasil dibuat dan menunggu persetujuan administrator',
       data: service,
     };
   }
@@ -83,8 +83,12 @@ export class ServicesController {
    */
   @Public()
   @Get(':id')
-  async findOne(@Param('id') id: string) {
-    const service = await this.servicesService.findOne(id);
+  async findOne(
+    @Param('id') id: string,
+    @GetUser('id') userId?: string,
+    @GetUser('role') role?: string,
+  ) {
+    const service = await this.servicesService.findOne(id, userId, role);
 
     return {
       success: true,

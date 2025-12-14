@@ -30,4 +30,10 @@ describe('AdminService', () => {
   it('should be defined', () => {
     expect(service).toBeDefined();
   });
+
+  it('should expose pending service management methods', () => {
+    expect(typeof service.getPendingServices).toBe('function');
+    expect(typeof service.approveService).toBe('function');
+    expect(typeof service.rejectService).toBe('function');
+  });
 });

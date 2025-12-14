@@ -96,3 +96,17 @@ Nest is an MIT-licensed open source project. It can grow thanks to the sponsors 
 ## License
 
 Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+
+## Database migration
+
+This change introduces new service statuses (`PENDING`, `REJECTED`) and adds an `adminNotes` column on the `Service` model. After pulling these changes run:
+
+```bash
+npx prisma migrate dev --name add-service-pending
+npx prisma generate
+```
+
+Troubleshooting:
+
+- If `npx prisma generate` fails with an EPERM error on Windows relating to `query_engine-windows.dll.node.tmp*`, make sure no Node processes are running (stop the server), then delete any `.tmp` files in `node_modules/.prisma/client/` and run `npx prisma generate` again. Antivirus software may also lock the file—try disabling it temporarily or running the command with elevated privileges.
+- If you see errors about invalid enum values (e.g., `invalid input value for enum "ServiceStatus": "PENDING"`), the migration wasn't applied — run the `prisma migrate` command above and then `npx prisma generate`.

@@ -13,6 +13,7 @@ import { AdminService } from './admin.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { AdminGuard } from './guards/admin.guard';
 import type { RejectPayoutDto } from './dto/reject-payout.dto';
+import type { RejectServiceDto } from './dto/reject-service.dto';
 import type { ResolveDisputeDto } from '../disputes/dto/resolve-dispute.dto';
 import { GetUser } from '../auth/decorators/get-user.decorator';
 
@@ -35,6 +36,16 @@ export class AdminController {
   }
 
   /**
+   * [Admin] Get services pending review
+   * GET /api/admin/services/pending
+   */
+  @Get('services/pending')
+  async getPendingServices() {
+    const services = await this.adminService.getPendingServices();
+    return { success: true, data: services };
+  }
+
+  /**
    * Menyetujui PayoutRequest
    * POST /api/admin/payouts/:id/approve
    */
@@ -47,6 +58,39 @@ export class AdminController {
       message: 'Permintaan penarikan berhasil disetujui',
       data: payout,
     };
+  }
+
+  /**
+   * [Admin] Approve a pending service
+   * POST /api/admin/services/:id/approve
+   */
+  @Post('services/:id/approve')
+  @HttpCode(HttpStatus.OK)
+  async approveService(
+    @GetUser('id') adminId: string,
+    @Param('id') serviceId: string,
+  ) {
+    const svc = await this.adminService.approveService(adminId, serviceId);
+    return { success: true, message: 'Jasa berhasil disetujui', data: svc };
+  }
+
+  /**
+   * [Admin] Reject a pending service
+   * POST /api/admin/services/:id/reject
+   */
+  @Post('services/:id/reject')
+  @HttpCode(HttpStatus.OK)
+  async rejectService(
+    @GetUser('id') adminId: string,
+    @Param('id') serviceId: string,
+    @Body() dto: RejectServiceDto,
+  ) {
+    const svc = await this.adminService.rejectService(
+      adminId,
+      serviceId,
+      dto.reason,
+    );
+    return { success: true, message: 'Jasa berhasil ditolak', data: svc };
   }
 
   /**

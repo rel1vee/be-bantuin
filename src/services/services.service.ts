@@ -3,8 +3,10 @@ import {
   NotFoundException,
   ForbiddenException,
   BadRequestException,
+  InternalServerErrorException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import type {
   CreateServiceDto,
   UpdateServiceDto,
@@ -14,12 +16,15 @@ import { Prisma } from '@prisma/client';
 
 @Injectable()
 export class ServicesService {
-  constructor(private prisma: PrismaService) {}
-
   /**
    * Create a new service listing
    * Only sellers can create services
    */
+  constructor(
+    private prisma: PrismaService,
+    private notificationService: NotificationsService,
+  ) {}
+
   async create(sellerId: string, dto: CreateServiceDto) {
     // Verify that user is a seller
     const user = await this.prisma.user.findUnique({
@@ -45,35 +50,82 @@ export class ServicesService {
       throw new ForbiddenException('Akun Anda tidak aktif');
     }
 
-    // Create the service
-    const service = await this.prisma.service.create({
-      data: {
-        sellerId,
-        title: dto.title,
-        description: dto.description,
-        category: dto.category,
-        price: dto.price,
-        deliveryTime: dto.deliveryTime,
-        revisions: dto.revisions,
-        images: dto.images || [],
-        status: 'ACTIVE',
-        isActive: true,
-      },
-      include: {
-        seller: {
-          select: {
-            id: true,
-            fullName: true,
-            profilePicture: true,
-            major: true,
-            batch: true,
-            avgRating: true,
-            totalReviews: true,
-            totalOrdersCompleted: true,
+    // Create the service in PENDING state waiting for admin approval
+    let service;
+    try {
+      service = await this.prisma.service.create({
+        data: {
+          sellerId,
+          title: dto.title,
+          description: dto.description,
+          category: dto.category,
+          price: dto.price,
+          deliveryTime: dto.deliveryTime,
+          revisions: dto.revisions,
+          images: dto.images || [],
+          // New services must be reviewed by admin before being active
+          status: 'PENDING' as any,
+          isActive: false,
+        },
+        include: {
+          seller: {
+            select: {
+              id: true,
+              fullName: true,
+              profilePicture: true,
+              major: true,
+              batch: true,
+              avgRating: true,
+              totalReviews: true,
+              totalOrdersCompleted: true,
+            },
           },
         },
-      },
+      });
+    } catch (e: any) {
+      // Helpful error messages for common migration/client mismatch issues
+      if (
+        e instanceof Prisma.PrismaClientKnownRequestError &&
+        e.code === 'P2022'
+      ) {
+        throw new InternalServerErrorException(
+          'Database schema mismatch: missing column on Service (admin_notes). Run `npx prisma migrate dev --name add-service-pending` and then `npx prisma generate`, then restart the server.',
+        );
+      }
+      if (
+        e instanceof Prisma.PrismaClientUnknownRequestError &&
+        typeof e.message === 'string' &&
+        e.message.includes('invalid input value for enum')
+      ) {
+        throw new InternalServerErrorException(
+          'Database enum mismatch: ServiceStatus is missing values (PENDING/REJECTED). Run `npx prisma migrate dev --name add-service-pending` and `npx prisma generate`.',
+        );
+      }
+      throw e;
+    }
+
+    // Notify seller that their service is pending review
+    void this.notificationService.create({
+      userId: sellerId,
+      content: `Jasa "${service.title}" telah dibuat dan menunggu persetujuan administrator.`,
+      link: `/services/${service.id}`,
+      type: 'GENERAL',
     });
+
+    // Notify all admins that there's a new service pending review
+    const admins = await this.prisma.user.findMany({
+      where: { role: 'ADMIN' },
+      select: { id: true },
+    });
+
+    for (const admin of admins) {
+      void this.notificationService.createInTx(this.prisma as any, {
+        userId: admin.id,
+        content: `Jasa baru "${service.title}" menunggu review administrator.`,
+        link: `/admin/services/pending`,
+        type: 'GENERAL',
+      });
+    }
 
     return service;
   }
@@ -198,7 +250,12 @@ export class ServicesService {
   /**
    * Get a single service by ID
    */
-  async findOne(id: string) {
+  /**
+   * Get a single service by ID
+   * If the service is not ACTIVE (e.g., PENDING/REJECTED) it will only be visible
+   * to the seller who owns it or to admins. Public access will return NotFound.
+   */
+  async findOne(id: string, viewerId?: string, viewerRole?: string) {
     const service = await this.prisma.service.findUnique({
       where: { id },
       include: {
@@ -242,6 +299,15 @@ export class ServicesService {
 
     if (!service) {
       throw new NotFoundException('Jasa tidak ditemukan');
+    }
+
+    // If service isn't active, restrict visibility
+    if (service.status !== ('ACTIVE' as any) || !service.isActive) {
+      const isOwner = viewerId && viewerId === service.sellerId;
+      const isAdmin = viewerRole === 'ADMIN';
+      if (!isOwner && !isAdmin) {
+        throw new NotFoundException('Jasa tidak ditemukan');
+      }
     }
 
     return service;
@@ -365,24 +431,36 @@ export class ServicesService {
    * Get seller's services
    */
   async getSellerServices(sellerId: string) {
-    const services = await this.prisma.service.findMany({
-      where: {
-        sellerId,
-        status: { not: 'DELETED' },
-      },
-      orderBy: {
-        createdAt: 'desc',
-      },
-      include: {
-        _count: {
-          select: {
-            orders: true,
+    try {
+      const services = await this.prisma.service.findMany({
+        where: {
+          sellerId,
+          status: { not: 'DELETED' } as any,
+        },
+        orderBy: {
+          createdAt: 'desc',
+        },
+        include: {
+          _count: {
+            select: {
+              orders: true,
+            },
           },
         },
-      },
-    });
+      });
 
-    return services;
+      return services;
+    } catch (e: any) {
+      if (
+        e instanceof Prisma.PrismaClientKnownRequestError &&
+        e.code === 'P2022'
+      ) {
+        throw new InternalServerErrorException(
+          'Database schema mismatch: missing column on Service (admin_notes). Run `npx prisma migrate dev --name add-service-pending` and `npx prisma generate`.',
+        );
+      }
+      throw e;
+    }
   }
 
   async getFeatured() {

@@ -4,10 +4,10 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { WalletsService } from '../wallets/wallets.service';
 import { OrdersService } from '../orders/orders.service';
 import type { ResolveDisputeDto } from '../disputes/dto/resolve-dispute.dto';
-import { NotificationsService } from '../notifications/notifications.service';
 import { Prisma } from '@prisma/client';
 
 @Injectable()
@@ -18,6 +18,92 @@ export class AdminService {
     private notificationService: NotificationsService,
     private ordersService: OrdersService,
   ) {}
+
+  /**
+   * [Admin] Get services that are pending review
+   */
+  async getPendingServices() {
+    return this.prisma.service.findMany({
+      // cast to any because Prisma client types may need regeneration after schema change
+      where: { status: 'PENDING' as any },
+      orderBy: { createdAt: 'asc' },
+      include: {
+        seller: {
+          select: { id: true, fullName: true, email: true },
+        },
+      },
+    });
+  }
+
+  /**
+   * [Admin] Approve a pending service
+   */
+  async approveService(adminId: string, serviceId: string) {
+    const svc = await this.prisma.service.findUnique({
+      where: { id: serviceId },
+    });
+    if (!svc) throw new NotFoundException('Jasa tidak ditemukan');
+    if (svc.status !== ('PENDING' as any)) {
+      throw new BadRequestException(
+        'Hanya jasa dengan status PENDING yang dapat disetujui',
+      );
+    }
+
+    const updated = await this.prisma.service.update({
+      where: { id: serviceId },
+      data: {
+        status: 'ACTIVE' as any,
+        isActive: true,
+        adminNotes: `Approved by ${adminId}` as any,
+      },
+      include: { seller: { select: { id: true } } },
+    });
+
+    // Notify seller
+    await this.notificationService.create({
+      userId: svc.sellerId,
+      content: `Jasa "${updated.title}" telah disetujui oleh administrator dan sekarang aktif.`,
+      link: `/services/${updated.id}`,
+      type: 'GENERAL',
+    });
+
+    return updated;
+  }
+
+  /**
+   * [Admin] Reject a pending service with reason
+   */
+  async rejectService(adminId: string, serviceId: string, reason: string) {
+    const svc = await this.prisma.service.findUnique({
+      where: { id: serviceId },
+    });
+    if (!svc) throw new NotFoundException('Jasa tidak ditemukan');
+    if (svc.status !== ('PENDING' as any)) {
+      throw new BadRequestException(
+        'Hanya jasa dengan status PENDING yang dapat ditolak',
+      );
+    }
+
+    const updated = await this.prisma.service.update({
+      where: { id: serviceId },
+      data: {
+        status: 'REJECTED' as any,
+        isActive: false,
+        adminNotes: reason as any,
+      },
+      include: { seller: { select: { id: true } } },
+    });
+
+    // Notify seller
+    await this.notificationService.create({
+      userId: svc.sellerId,
+      content: `Jasa "${updated.title}" ditolak oleh administrator. Alasan: ${reason}`,
+      link: `/services/${updated.id}`,
+      type: 'GENERAL',
+    });
+
+    return updated;
+  }
 
   /**
    * Mendapatkan daftar PayoutRequest yang masih 'pending'
@@ -33,7 +119,7 @@ export class AdminService {
         account: true,
         wallet: {
           select: { balance: true },
-        }, 
+        },
       },
     });
   }
@@ -234,29 +320,31 @@ export class AdminService {
         balance: true,
       },
     });
-    
+
     // 2. Hitung Total Pendapatan Platform (10% dari total order COMPLETED)
     const totalCompletedOrdersPrice = await this.prisma.order.aggregate({
-        where: {
-            status: 'COMPLETED',
-        },
-        _sum: {
-            price: true,
-        },
+      where: {
+        status: 'COMPLETED',
+      },
+      _sum: {
+        price: true,
+      },
     });
 
     // 3. Hitung Total Pengguna Aktif (Bukan Admin dan tidak di-ban) <-- BARU
     const totalActiveUsers = await this.prisma.user.count({
-        where: {
-            role: {
-                not: 'ADMIN',
-            },
-            status: 'active',
+      where: {
+        role: {
+          not: 'ADMIN',
         },
+        status: 'active',
+      },
     });
 
     // Asumsi fee platform 10%
-    const totalRevenue = totalCompletedOrdersPrice._sum.price ? totalCompletedOrdersPrice._sum.price.toNumber() * 0.1 : 0;
+    const totalRevenue = totalCompletedOrdersPrice._sum.price
+      ? totalCompletedOrdersPrice._sum.price.toNumber() * 0.1
+      : 0;
 
     return {
       totalUserBalance: totalBalanceResult._sum.balance || 0,
@@ -264,7 +352,7 @@ export class AdminService {
       totalActiveUsers: totalActiveUsers,
     };
   }
-  
+
   /**
    * [Admin] Mendapatkan riwayat uang masuk (Transaksi Kredit/Positif)
    */
