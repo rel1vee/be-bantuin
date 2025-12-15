@@ -8,21 +8,29 @@ import pinoHttp from 'pino-http';
 import * as Sentry from '@sentry/nestjs';
 
 async function bootstrap() {
+  const isProduction = process.env.NODE_ENV === 'production';
   const pinoLogger = pino({
     level: 'info',
-    transport: {
-      target: 'pino-pretty',
-      options: {
-        colorize: true,
-        translateTime: 'yyyy-mm-dd HH:MM:ss',
-        ignore: 'pid,hostname',
-        singleLine: true,
+    // Hapus pino-pretty di production
+    ...(!isProduction && {
+      transport: {
+        target: 'pino-pretty',
+        options: {
+          colorize: true,
+          translateTime: 'yyyy-mm-dd HH: MM:ss',
+          ignore: 'pid,hostname',
+          singleLine: true,
+        },
       },
-    },
+    }),
   });
 
   // Buat app
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, {
+    logger: isProduction
+      ? ['error', 'warn']
+      : ['log', 'error', 'warn', 'debug', 'verbose'],
+  });
 
   const configService = app.get(ConfigService);
 
@@ -56,7 +64,8 @@ async function bootstrap() {
         origin === frontendUrl ||
         origin.startsWith('http://localhost') ||
         origin.includes('.ngrok-free.dev') ||
-        origin.includes('.ngrok.io')
+        origin.includes('.ngrok.io') ||
+        origin.includes('.vercel.app')
       ) {
         callback(null, true);
       } else {

@@ -5,7 +5,6 @@ generator client {
 datasource db {
   provider  = "postgresql"
   url       = env("DATABASE_URL")
-  directUrl = env("DIRECT_URL")
 }
 
 model User {
@@ -419,71 +418,6 @@ enum ServiceStatus {
   DELETED
   PENDING
   REJECTED
-}
-
-enum OrderStatus {
-  DRAFT
-  WAITING_PAYMENT
-  PAID_ESCROW
-  IN_PROGRESS
-  DELIVERED
-  REVISION
-  COMPLETED
-  CANCELLED
-  DISPUTED
-  RESOLVED
-}
-
-enum PaymentStatus {
-  PENDING
-  SETTLEMENT
-  EXPIRE
-  CANCELLED
-}
-
-enum PayoutStatus {
-  PENDING
-  APPROVED
-  REJECTED
-  COMPLETED
-}
-
-enum WalletTransactionType {
-  ESCROW_RELEASE
-  ESCROW_REFUND
-  PAYOUT_REQUEST
-  PAYOUT_REJECTED
-  DISPUTE_RELEASE
-  DISPUTE_REFUND
-}
-
-enum DisputeStatus {
-  OPEN
-  RESOLVED
-}
-
-enum DisputeResolution {
-  RELEASE_TO_SELLER
-  REFUND_TO_BUYER
-}
-
-enum ReportStatus {
-  OPEN
-  RESOLVED
-  DISMISSED
-}
-
-enum Role {
-  USER
-  ADMIN
-}
-
-enum ServiceStatus {
-  PENDING
-  ACTIVE
-  PAUSED
-  REJECTED
-  DELETED
 }
 
 enum OrderStatus {
