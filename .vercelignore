@@ -1,0 +1,13 @@
+node_modules
+test
+coverage
+.env
+.env.local
+.env.*.local
+*.log
+.DS_Store
+.vscode
+.idea
+*.spec.ts
+*.test.ts
+frontend-example

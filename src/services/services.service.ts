@@ -217,7 +217,7 @@ export class ServicesService {
         where,
         orderBy,
         skip,
-        take: limit,
+        take: Number(limit),
         include: {
           seller: {
             select: {
