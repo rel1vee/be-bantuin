@@ -51,7 +51,9 @@ export class AdminController {
    */
   @Get('services/:id')
   async getServiceById(@Param('id') id: string) {
+    console.log(`[AdminController] Request Service Detail ID: ${id}`);
     const service = await this.adminService.getServiceById(id);
+    console.log(`[AdminController] Found Service:`, service ? 'Yes' : 'No');
     return { success: true, data: service };
   }
 
