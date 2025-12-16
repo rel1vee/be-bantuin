@@ -17,6 +17,7 @@ import { RequestPhoneVerificationDto, VerifyPhoneDto } from './dto/phone-verific
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { Public } from 'src/auth/decorators/public.decorator';
 import { LogService } from 'src/common/log.service';
+import { PrismaService } from 'src/prisma/prisma.service';
 
 @Controller('users')
 @UseGuards(JwtAuthGuard)
@@ -24,6 +25,7 @@ export class UsersController {
   constructor(
     private readonly usersService: UsersService,
     private readonly logService: LogService,
+    private readonly prisma: PrismaService,
   ) {}
 
   @Get('profile')
@@ -81,6 +83,27 @@ export class UsersController {
       success: true,
       message: 'Berhasil menjadi penyedia jasa',
       data: user,
+    };
+  }
+
+  @Get('activity')
+  async getActivity(@GetUser('id') userId: string) {
+    const logs = await this.prisma.userActivityLog.findMany({
+      where: { userId },
+      orderBy: { timestamp: 'desc' },
+      take: 50,
+      select: {
+        action: true,
+        status: true,
+        details: true,
+        device: true,
+        timestamp: true,
+      },
+    });
+
+    return {
+      success: true,
+      data: logs,
     };
   }
 
