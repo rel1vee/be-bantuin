@@ -97,7 +97,8 @@ async function bootstrap() {
         origin.startsWith('http://localhost') ||
         origin.includes('.ngrok-free.dev') ||
         origin.includes('.ngrok.io') ||
-        origin.includes('.vercel.app')
+        origin.includes('.vercel.app') ||
+        origin.includes('https://api.bantuin-campus.me')
       ) {
         callback(null, true);
       } else {

@@ -16,6 +16,7 @@ import type {
 } from './dto/upload.dto';
 import * as path from 'path';
 import { randomBytes } from 'crypto';
+import sharp from 'sharp';
 import {
   generateAccountPhotoPath,
   generateServicePhotoPath,
@@ -34,6 +35,51 @@ export class StorageService {
    */
   private generateRandomString(length: number = 16): string {
     return randomBytes(length).toString('hex');
+  }
+
+  /**
+   * Kompres gambar menggunakan sharp
+   * @param buffer Buffer gambar original
+   * @param mimetype MIME type gambar
+   * @returns Buffer gambar yang sudah dikompres
+   */
+  private async compressImage(
+    buffer: Buffer,
+    mimetype: string,
+  ): Promise<Buffer> {
+    try {
+      const image = sharp(buffer);
+      const metadata = await image.metadata();
+
+      // Tentukan format output berdasarkan mimetype
+      let compressed = image;
+
+      // Resize jika gambar terlalu besar (max 1920px width)
+      if (metadata.width && metadata.width > 1920) {
+        compressed = compressed.resize(1920, null, {
+          withoutEnlargement: true,
+          fit: 'inside',
+        });
+      }
+
+      // Kompres sesuai format
+      if (mimetype === 'image/jpeg' || mimetype === 'image/jpg') {
+        compressed = compressed.jpeg({ quality: 80, progressive: true });
+      } else if (mimetype === 'image/png') {
+        compressed = compressed.png({ quality: 80, compressionLevel: 9 });
+      } else if (mimetype === 'image/webp') {
+        compressed = compressed.webp({ quality: 80 });
+      } else if (mimetype === 'image/gif') {
+        // GIF tidak dikompres, hanya resize
+        compressed = compressed.gif();
+      }
+
+      return await compressed.toBuffer();
+    } catch (error) {
+      // Jika gagal kompres, gunakan buffer original
+      console.error('Error compressing image:', error);
+      return buffer;
+    }
   }
 
   /**
@@ -61,10 +107,16 @@ export class StorageService {
       ? `${dto.path}/${fileName}`
       : `${new Date().getFullYear()}/${new Date().getMonth() + 1}/${fileName}`;
 
+    // Kompres gambar sebelum upload
+    const compressedBuffer = await this.compressImage(
+      file.buffer,
+      file.mimetype,
+    );
+
     const result = await this.supabaseService.uploadFile(
       bucketName,
       filePath,
-      file.buffer,
+      compressedBuffer,
       file.mimetype,
     );
 
@@ -120,10 +172,16 @@ export class StorageService {
     const bucketName = dto.bucket || 'uploads';
     const filePath = dto.path;
 
+    // Kompres gambar sebelum update
+    const compressedBuffer = await this.compressImage(
+      file.buffer,
+      file.mimetype,
+    );
+
     const result = await this.supabaseService.updateFile(
       bucketName,
       filePath,
-      file.buffer,
+      compressedBuffer,
       file.mimetype,
     );
 
@@ -185,10 +243,16 @@ export class StorageService {
       fileName,
     );
 
+    // Kompres gambar sebelum upload
+    const compressedBuffer = await this.compressImage(
+      file.buffer,
+      file.mimetype,
+    );
+
     const result = await this.supabaseService.uploadFile(
       dto.bucket,
       filePath,
-      file.buffer,
+      compressedBuffer,
       file.mimetype,
     );
 
@@ -222,10 +286,16 @@ export class StorageService {
       fileName,
     );
 
+    // Kompres gambar sebelum upload
+    const compressedBuffer = await this.compressImage(
+      file.buffer,
+      file.mimetype,
+    );
+
     const result = await this.supabaseService.uploadFile(
       dto.bucket,
       filePath,
-      file.buffer,
+      compressedBuffer,
       file.mimetype,
     );
 
@@ -259,10 +329,16 @@ export class StorageService {
       fileName,
     );
 
+    // Kompres gambar sebelum upload
+    const compressedBuffer = await this.compressImage(
+      file.buffer,
+      file.mimetype,
+    );
+
     const result = await this.supabaseService.uploadFile(
       dto.bucket,
       filePath,
-      file.buffer,
+      compressedBuffer,
       file.mimetype,
     );
 
@@ -296,10 +372,16 @@ export class StorageService {
       fileName,
     );
 
+    // Kompres gambar sebelum upload
+    const compressedBuffer = await this.compressImage(
+      file.buffer,
+      file.mimetype,
+    );
+
     const result = await this.supabaseService.uploadFile(
       dto.bucket,
       filePath,
-      file.buffer,
+      compressedBuffer,
       file.mimetype,
     );
 

@@ -1,0 +1,66 @@
+# Dependencies
+node_modules
+npm-debug.log
+yarn-error.log
+# package-lock.json - NEEDED for npm ci
+yarn.lock
+pnpm-lock.yaml
+
+# Testing
+coverage
+.nyc_output
+
+# IDE
+.idea
+.vscode
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build
+dist
+build
+*.log
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Prisma
+prisma/migrations/.migration_lock.toml
+
+# Git
+.git
+.gitignore
+.github
+
+# Documentation
+README.md
+*.md
+
+# Docker
+Dockerfile
+.dockerignore
+docker-compose*.yml
+
+# Test files
+*.spec.ts
+test
+e2e
+
+# CI/CD
+.gitlab-ci.yml
+.travis.yml
+azure-pipelines.yml
+
+# Misc - Keep config files needed for build
+.eslintrc.js
+.prettierrc
+# tsconfig.json - NEEDED for build
+# tsconfig.build.json - NEEDED for build
+# nest-cli.json - NEEDED for build
