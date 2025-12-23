@@ -41,6 +41,7 @@ export class UsersService {
         role: true,
         createdAt: true,
         updatedAt: true,
+        termsAcceptedAt: true,
       },
     });
 
@@ -150,6 +151,7 @@ export class UsersService {
         role: true,
         createdAt: true,
         updatedAt: true,
+        termsAcceptedAt: true,
       },
     });
 
@@ -184,6 +186,7 @@ export class UsersService {
         role: true,
         createdAt: true,
         updatedAt: true,
+        termsAcceptedAt: true,
       },
     });
 
@@ -413,6 +416,7 @@ export class UsersService {
         role: true,
         createdAt: true,
         updatedAt: true,
+        termsAcceptedAt: true,
       },
     });
 

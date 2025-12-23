@@ -47,6 +47,7 @@ model User {
   reviews                  Review[]                  @relation("ReviewAuthor")
   services                 Service[]                 @relation("SellerServices")
   wallet                   Wallet?
+  termsAcceptedAt          DateTime?
 
   @@map("users")
 }

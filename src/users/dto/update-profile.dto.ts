@@ -7,6 +7,7 @@ export const UpdateProfileSchema = z.object({
     profilePicture: z.string().optional(),
     coverPicture: z.string().optional(),
     socialMedia: z.any().optional(),
+    termsAcceptedAt: z.string().optional(),
 });
 
 export class UpdateProfileDto extends createZodDto(UpdateProfileSchema) { }
